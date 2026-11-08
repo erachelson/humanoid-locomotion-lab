@@ -3,7 +3,7 @@
 Goal: take a robot description, train a locomotion policy in Isaac Lab, and deploy it in a MuJoCo
 simulation of the same robot (sim2sim). Reference platform: Unitree G1 (29 DoF).
 
-Last updated: 2026-11-07.
+Last updated: 2026-11-08.
 
 ## Key decision: which G1 task
 
@@ -24,7 +24,7 @@ Status:
 
 - [x] Isaac Lab 2.3 / Isaac Sim 5.1 in conda env `env_isaaclab`
 - [x] unitree_rl_lab installed (editable), `UNITREE_ROS_DIR` set to `~/git_repos/unitree_ros`
-- [x] `mujoco` 4.0.0 installed in `env_isaaclab`
+- [x] `mujoco` 4.0.0 and `onnxruntime` 1.31.1 installed in `env_isaaclab`
 - [x] `~/git_repos/unitree_mujoco` cloned; `simulate/config.yaml` set to `robot: "g1"`, `domain_id: 0`,
       `interface: "lo"`, `use_joystick: 1`, `enable_elastic_band: 1`
 - [x] `~/git_repos/unitree_sdk2` cloned
@@ -47,20 +47,76 @@ Status:
       simulator's `joystick_type: "xbox"` mapping.
 - [x] Sim2sim with Unitree's bundled pretrained policy: the G1 walks in MuJoCo (2026-11-07).
       See "Running the MuJoCo sim2sim" below.
-- [ ] Train:
+- [x] Train (run `2026-11-07_18-18-18`, 5000 iterations in 3.2 h):
       ```bash
       cd ~/git_repos/unitree_rl_lab
       python scripts/rsl_rl/train.py --headless --task Unitree-G1-29dof-Velocity --num_envs 2048 --max_iterations 5000
       ```
-      (Default `max_iterations` is 50000. At ≈2.4 s/iteration, 5000 iterations take ≈3.5 h. Watch
-      the curves with `tensorboard --logdir logs/rsl_rl` and stop or resume as needed.)
-- [ ] Play and export: `python scripts/rsl_rl/play.py --task Unitree-G1-29dof-Velocity`
-      → `logs/.../exported/policy.onnx`, plus `params/deploy.yaml` written at training time
-- [ ] Sim2sim with your own policy: set `policy_dir` in
-      `unitree_rl_lab/deploy/robots/g1_29dof/config/config.yaml` (`Velocity` state) to your run folder,
-      e.g. `../../../logs/rsl_rl/unitree_g1_29dof_velocity/<run>`, and give it a specific run: the
-      parent folder resolves to the latest exported run, which today is the aborted
-      `2026-11-06_16-36-56` (only `model_0.pt`). The config is read at startup, so restart `g1_ctrl`.
+      (Default `max_iterations` is 50000. Watch the curves with `tensorboard --logdir logs/rsl_rl`
+      from a shell where `env_isaaclab` is activated.)
+      Result at iteration 4999: mean reward 19, mean episode length 775/1000, 45% of episodes still
+      end with `bad_orientation` (falls), velocity-command curriculum at 0.4. Not converged.
+- [x] Play and export (`--video` makes play.py exit after one clip instead of looping forever):
+      ```bash
+      python scripts/rsl_rl/play.py --headless --task Unitree-G1-29dof-Velocity --num_envs 16 \
+          --load_run 2026-11-07_18-18-18 --video --video_length 500
+      ```
+      → `<run>/exported/policy.onnx` (input `obs` [1, 480], output `actions` [1, 29], same as the
+      bundled policy) and `<run>/videos/play/rl-video-step-0.mp4`. `params/deploy.yaml` is written
+      at training time. Its gains differ from the bundled v0 policy (waist roll/pitch Kp 40 vs 200,
+      arm Kd 1 vs 10) because Unitree trained v0 with other settings; each policy brings its own deploy.yaml.
+- [x] Sim2sim with your own policy (2026-11-08): `policy_dir` in
+      `unitree_rl_lab/deploy/robots/g1_29dof/config/config.yaml` (`Velocity` state) points to
+      `../../../logs/rsl_rl/unitree_g1_29dof_velocity/2026-11-07_18-18-18` (relative paths resolve
+      from `deploy/robots/g1_29dof/`); the bundled policy line is kept commented out to switch back.
+      Always name a specific run: the parent folder resolves to the alphabetically last run with
+      an `exported/` folder. The config is read at startup, so restart `g1_ctrl` after a change.
+      Result in MuJoCo: the policy runs but does not walk (small backward hops; leans forward
+      without moving when pushing the stick).
+- [x] Evaluate in Isaac Lab to separate undertraining from sim2sim issues (2026-11-08):
+      `evaluation/eval_velocity_tracking.py` holds fixed velocity commands (pushes and curricula
+      off) and reports the command seen in the observation, the measured velocity, falls and base height.
+      ```bash
+      python evaluation/eval_velocity_tracking.py --policy <run>/exported/policy.pt   # or .onnx
+      ```
+      | Command (m/s) | Own policy (5000 it.): measured / falls | Unitree v0: measured / falls |
+      |---|---|---|
+      | 0, 0 | 0.00, 0.00 / 2% | −0.01, −0.01 / 48% |
+      | forward 0.4 | 0.00, 0.00 / 0% | +0.62, −0.18 / 69% |
+      | forward 0.8 | 0.00, 0.00 / 0% | +0.90, −0.10 / 88% |
+      | sideways 0.3 | 0.00, 0.00 / 0% | +0.11, +0.06 / 34% |
+
+      Conclusions:
+      - The own policy learned to **stand, not walk**, even in Isaac Lab: the problem is training,
+        not sim2sim. The curriculum starts at ±0.1 m/s, where standing still earns almost the full
+        tracking reward, and 5000 iterations × 2048 envs is ≈5% of the task's default budget
+        (50000 × 4096). The 45% training falls came from the random pushes.
+      - Unitree v0 walks and tracks forward commands but falls a lot here, because it was trained
+        with other gains (waist Kp 200, arm Kd 10) than this task's (40, 1): a direct illustration of
+        how sensitive policies are to actuator parameters.
+      - The deploy controller maps a full stick to the `limit_ranges` (up to 1.0 m/s forward), not to
+        the range the curriculum actually reached (±0.4 m/s at iteration 4999).
+      - Judge training progress with this script, not with the mean reward, which hid that the
+        policy stands still.
+- [ ] Resume training tonight for ≈10 h (15000 more iterations at ≈2.4 s/iteration):
+      ```bash
+      cd ~/git_repos/unitree_rl_lab
+      python scripts/rsl_rl/train.py --headless --task Unitree-G1-29dof-Velocity --num_envs 2048 \
+          --max_iterations 15000 --resume --load_run 2026-11-07_18-18-18
+      ```
+      - Resuming creates a new run folder (named by its start time) and trains `--max_iterations`
+        *additional* iterations from the last checkpoint of the loaded run.
+      - The velocity-command curriculum is not stored in checkpoints: the resumed run starts again
+        at ±0.1 m/s and has to climb back up.
+      - Afterwards: export with `play.py --load_run <new run> --video` (see above), check walking with
+        `eval_velocity_tracking.py`, and only then point `policy_dir` to the new run and retry MuJoCo.
+      - Alternative if it still stands: make the curriculum start from larger command ranges in
+        `CommandsCfg` (`velocity_env_cfg.py`), so that standing still stops paying off early.
+
+Note: a shell where `env_isaaclab` is not activated (e.g. Claude's shell in the desktop app) uses
+the base `/home/emmanuel/anaconda3/bin/python` and fails with "No module named 'isaaclab'". Run
+`conda activate env_isaaclab` first, or call `/home/emmanuel/anaconda3/envs/env_isaaclab/bin/python`
+directly (equivalent for running scripts).
 
 ### Running the MuJoCo sim2sim
 
