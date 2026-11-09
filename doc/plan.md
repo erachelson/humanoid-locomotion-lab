@@ -3,7 +3,7 @@
 Goal: take a robot description, train a locomotion policy in Isaac Lab, and deploy it in a MuJoCo
 simulation of the same robot (sim2sim). Reference platform: Unitree G1 (29 DoF).
 
-Last updated: 2026-11-08.
+Last updated: 2026-11-09.
 
 ## Key decision: which G1 task
 
@@ -98,7 +98,8 @@ Status:
         the range the curriculum actually reached (±0.4 m/s at iteration 4999).
       - Judge training progress with this script, not with the mean reward, which hid that the
         policy stands still.
-- [ ] Resume training tonight for ≈10 h (15000 more iterations at ≈2.4 s/iteration):
+- [x] Resume training for ≈10 h (15000 more iterations at ≈2.4 s/iteration), run
+      `2026-11-09_00-14-03`, last checkpoint `model_19998.pt`:
       ```bash
       cd ~/git_repos/unitree_rl_lab
       python scripts/rsl_rl/train.py --headless --task Unitree-G1-29dof-Velocity --num_envs 2048 \
@@ -112,6 +113,34 @@ Status:
         `eval_velocity_tracking.py`, and only then point `policy_dir` to the new run and retry MuJoCo.
       - Alternative if it still stands: make the curriculum start from larger command ranges in
         `CommandsCfg` (`velocity_env_cfg.py`), so that standing still stops paying off early.
+- [x] Check the resumed run (2026-11-09): exported (`exported/policy.pt`, `policy.onnx`, play video),
+      `eval_velocity_tracking.py` shows it walks in Isaac Lab, and it walks in MuJoCo with the deploy
+      controller. `policy_dir` in `deploy/robots/g1_29dof/config/config.yaml` now points to
+      `../../../logs/rsl_rl/unitree_g1_29dof_velocity/2026-11-09_00-14-03`; the lines for the bundled
+      policy and the 5000-iteration run are kept commented out.
+      **Phase 1 complete:** own policy trained in Isaac Lab and running in MuJoCo via Unitree's tooling.
+
+      `eval_velocity_tracking.py` on `2026-11-09_00-14-03/exported/policy.pt` (64 envs, 8 s per command):
+      | Command (vx, vy, wz) | Measured (vx, vy, wz) | Fell | Base height |
+      |---|---|---|---|
+      | 0, 0, 0 | +0.00, +0.00, +0.00 | 0% | 0.79 m |
+      | +0.20, 0, 0 | +0.14, +0.00, +0.02 | 0% | 0.78 m |
+      | +0.40, 0, 0 | +0.39, +0.01, +0.03 | 0% | 0.78 m |
+      | +0.80, 0, 0 | +0.79, +0.02, +0.01 | 0% | 0.77 m |
+      | −0.30, 0, 0 | −0.22, −0.02, −0.01 | 0% | 0.78 m |
+      | 0, +0.30, 0 | +0.00, +0.22, −0.01 | 0% | 0.78 m |
+      | 0, 0, +0.20 | −0.00, −0.00, −0.00 | 0% | 0.79 m |
+
+      Compared with the 5000-iteration run (0.00 for every command), it now walks: forward tracking
+      is accurate at 0.4–0.8 m/s, with no falls (no pushes in this test). Weaker points:
+      - Slow and backward/sideways commands undershoot by about 25–30% (0.2 → 0.14, −0.3 → −0.22,
+        0.3 → 0.22): with the exponential tracking reward (std 0.5), small errors cost little.
+      - **It does not turn at all.** The command curriculum (`CurriculumCfg`) only enables
+        `lin_vel_cmd_levels`, which widens `lin_vel_x`/`lin_vel_y`; `ang_vel_z` stays at its initial
+        ±0.1 rad/s for the whole training, so 0.2 rad/s is out of distribution. Within ±0.1 rad/s,
+        not turning still earns ≈96% of `track_ang_vel_z` (exp(−0.1²/0.25)): the same "standing still
+        pays" trap as before, for yaw. `mdp.ang_vel_cmd_levels` exists in
+        `tasks/locomotion/mdp/curriculums.py` but is not enabled in the G1 task.
 
 Note: a shell where `env_isaaclab` is not activated (e.g. Claude's shell in the desktop app) uses
 the base `/home/emmanuel/anaconda3/bin/python` and fails with "No module named 'isaaclab'". Run
