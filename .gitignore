@@ -8,3 +8,6 @@ logs/
 outputs/
 *.pt
 *.onnx
+# ...except the curated policies kept in policies/
+!policies/**/*.pt
+!policies/**/*.onnx

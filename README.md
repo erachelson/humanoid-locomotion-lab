@@ -14,6 +14,16 @@ The reference platform is a Unitree G1 robot.
 - Unitree SDK2 as a reference for the eventual hardware interface, without attempting actual hardware communication.
 - PyTorch / ONNX Runtime for policy inference and deployment.
 
+## Repository layout
+
+| Folder | Content |
+|---|---|
+| `doc/` | `plan.md`: learning plan, progress, results and run instructions |
+| `notebooks/` | hands-on curriculum (Isaac Lab 3.0 + Newton): skeletons, `solutions/`, `_build/` sources |
+| `scripts/` | standalone tools for the G1 pipeline (Isaac Lab 2.3): `inspect_task_specs.py`, `eval_velocity_tracking.py` |
+| `policies/` | curated trained policies (exported ONNX/TorchScript, deploy params, last checkpoint) |
+| `deployment/` | own sim2sim and hardware-independent inference interface (Phase 4, to do) |
+
 ## Quick start on a new machine
 
 Requirements: Linux, an NVIDIA GPU with a recent driver (tested: RTX 2060 6 GB, driver 580), git.
@@ -89,8 +99,12 @@ system packages (`libyaml-cpp-dev libboost-all-dev libeigen3-dev libspdlog-dev l
 unitree_sdk2 (`sudo make install`), the MuJoCo 3.3.6 C release symlinked into `unitree_mujoco/simulate/`,
 the simulator and the `g1_ctrl` controller builds, the config files, and "Running the MuJoCo sim2sim".
 
-Trained policies are not in this repository: they live in `~/git_repos/unitree_rl_lab/logs/rsl_rl/`.
-To keep the walking policy, copy `logs/rsl_rl/unitree_g1_29dof_velocity/2026-11-09_00-14-03/` from the
-old machine (`exported/` and `params/` are enough for the sim2sim).
+The trained walking policy is versioned in [policies/](policies/README.md). To run it in MuJoCo, set in
+`~/git_repos/unitree_rl_lab/deploy/robots/g1_29dof/config/config.yaml` (`Velocity` state; relative paths
+resolve from `deploy/robots/g1_29dof/`, `~` is not expanded):
+
+```yaml
+policy_dir: ../../../../humanoid-locomotion-lab/policies/g1_29dof_velocity/2026-11-09_00-14-03
+```
 
 Training on a 6 GB GPU: use `--num_envs 2048` (the default 4096 runs out of memory).

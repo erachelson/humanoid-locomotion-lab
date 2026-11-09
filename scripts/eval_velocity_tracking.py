@@ -5,8 +5,8 @@ velocity the robots actually reach (body frame, averaged after a warm-up) and ho
 Pushes and curricula are disabled so that results only reflect the policy.
 
 Usage (from a shell with env_isaaclab activated):
-    python evaluation/eval_velocity_tracking.py --policy <run>/exported/policy.pt
-    python evaluation/eval_velocity_tracking.py --policy <dir>/exported/policy.onnx --commands "0,0,0" "0.5,0,0"
+    python scripts/eval_velocity_tracking.py --policy <run>/exported/policy.pt
+    python scripts/eval_velocity_tracking.py --policy <dir>/exported/policy.onnx --commands "0,0,0" "0.5,0,0"
 """
 
 import argparse

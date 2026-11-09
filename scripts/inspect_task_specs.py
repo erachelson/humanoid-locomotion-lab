@@ -1,8 +1,8 @@
 """Print the MDP interface of an Isaac Lab task: observations, actions, joint order, timing and actuator gains.
 
 Usage:
-    ~/git_repos/IsaacLab/isaaclab.sh -p experiments/explore_G1_specs.py                      # Unitree G1 29-DoF
-    ~/git_repos/IsaacLab/isaaclab.sh -p experiments/explore_G1_specs.py --task Isaac-Velocity-Flat-G1-v0
+    ~/git_repos/IsaacLab/isaaclab.sh -p scripts/inspect_task_specs.py                      # Unitree G1 29-DoF
+    ~/git_repos/IsaacLab/isaaclab.sh -p scripts/inspect_task_specs.py --task Isaac-Velocity-Flat-G1-v0
 """
 
 import argparse

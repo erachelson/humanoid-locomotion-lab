@@ -12,7 +12,7 @@ Last updated: 2026-11-09.
 | `Isaac-Velocity-Flat-G1-v0` (Isaac Lab) | Older 37-DoF G1 (Dex hand joints, single `torso_joint`) | Learning how Isaac Lab tasks are built only |
 | `Unitree-G1-29dof-Velocity` (unitree_rl_lab) | G1 29-DoF, same as `unitree_mujoco` and the real robot | **The actual pipeline** |
 
-`experiments/explore_G1_specs.py` prints the full MDP interface of either task
+`scripts/inspect_task_specs.py` prints the full MDP interface of either task
 (`--task <id>`, default `Unitree-G1-29dof-Velocity`).
 
 ## Phase 1: run the reference pipeline end to end (about 1 week)
@@ -74,10 +74,10 @@ Status:
       Result in MuJoCo: the policy runs but does not walk (small backward hops; leans forward
       without moving when pushing the stick).
 - [x] Evaluate in Isaac Lab to separate undertraining from sim2sim issues (2026-11-08):
-      `evaluation/eval_velocity_tracking.py` holds fixed velocity commands (pushes and curricula
+      `scripts/eval_velocity_tracking.py` holds fixed velocity commands (pushes and curricula
       off) and reports the command seen in the observation, the measured velocity, falls and base height.
       ```bash
-      python evaluation/eval_velocity_tracking.py --policy <run>/exported/policy.pt   # or .onnx
+      python scripts/eval_velocity_tracking.py --policy <run>/exported/policy.pt   # or .onnx
       ```
       | Command (m/s) | Own policy (5000 it.): measured / falls | Unitree v0: measured / falls |
       |---|---|---|
@@ -118,6 +118,9 @@ Status:
       controller. `policy_dir` in `deploy/robots/g1_29dof/config/config.yaml` now points to
       `../../../logs/rsl_rl/unitree_g1_29dof_velocity/2026-11-09_00-14-03`; the lines for the bundled
       policy and the 5000-iteration run are kept commented out.
+      Since 2026-11-09 the run is versioned in this repository (`policies/g1_29dof_velocity/2026-11-09_00-14-03/`:
+      `exported/`, `params/`, `model_19998.pt`) and `policy_dir` points to that copy:
+      `../../../../humanoid-locomotion-lab/policies/g1_29dof_velocity/2026-11-09_00-14-03`.
       **Phase 1 complete:** own policy trained in Isaac Lab and running in MuJoCo via Unitree's tooling.
 
       `eval_velocity_tracking.py` on `2026-11-09_00-14-03/exported/policy.pt` (64 envs, 8 s per command):
@@ -267,7 +270,7 @@ Replace Unitree's C++ deploy with a Python MuJoCo loop:
 4. Target = default joint pos + action scale × action.
 
 Facts about `Unitree-G1-29dof-Velocity` that the MuJoCo side must reproduce (from
-`explore_G1_specs.py` and `params/deploy.yaml`):
+`scripts/inspect_task_specs.py` and `params/deploy.yaml`):
 
 - Policy observation: 480 values = 6 terms × 5-step history: `base_ang_vel` (3), `projected_gravity` (3),
   `velocity_commands` (3), `joint_pos_rel` (29), `joint_vel_rel` (29), `last_action` (29).
@@ -276,7 +279,7 @@ Facts about `Unitree-G1-29dof-Velocity` that the MuJoCo side must reproduce (fro
 - Action: 29 joint position targets, scale 0.25, offset = default joint positions.
 - Joint order is Isaac's breadth-first order (interleaved left/right/waist), not the MJCF order:
   map by joint name.
-- Per-joint Kp / Kd / effort limit / armature / default position: printed by `explore_G1_specs.py`.
+- Per-joint Kp / Kd / effort limit / armature / default position: printed by `scripts/inspect_task_specs.py`.
 
 Typical sim2sim bugs, to diff term by term: joint order, default positions, action scale,
 observation order/scale/history stacking, velocity frame, quaternion convention, gains/armature, timing.
