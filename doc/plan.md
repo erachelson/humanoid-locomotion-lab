@@ -187,6 +187,53 @@ Troubleshooting:
 - Robot falls when the band is released: the policy is not active yet (step 3) or the feet were not
   on the ground; reset with `Backspace`, re-enable the band with `9` and redo steps 1–4.
 
+## Interlude: hands-on notebook curriculum (started 2026-11-09)
+
+Phase 1 worked but Claude did most of the hands-on work. Goal of this interlude: be able to build
+each piece from an empty file. Notebooks in `notebooks/`, each a skeleton with `# TODO` gaps and
+check cells; solutions in `notebooks/solutions/` (generated from one source per lesson in
+`notebooks/_build/`: `python notebooks/_build/build.py notebooks/_build/lessonNN.py`).
+
+**Stack: Isaac Lab 3.0 with the Newton backend (MJWarp solver), no Isaac Sim.**
+- Isaac Lab 3.0 (released 2026-10-19) runs Newton without Isaac Sim, which removes the notebook
+  problems of Isaac Sim (one app launch per process, must start before imports). Isaac Sim 6.2 would
+  also need 16 GB of VRAM (RTX 2060: 6 GB).
+- Installed as a git worktree `~/git_repos/IsaacLab-3.0` (tag `v3.0.0`) with a uv-managed `.venv`
+  (Python 3.12, PyTorch 2.11 + CUDA 13, Warp 1.17, Newton 1.6.1). The 2.3.0 checkout and
+  `env_isaaclab` stay as they are for unitree_rl_lab (which requires Isaac Lab 2.3).
+- Tested 2026-11-09: cart-pole training from the CLI (4096 envs, 0.18 s/iteration); in one Jupyter
+  kernel: low-level scene + camera, a second simulation without restarting, `Isaac-Cartpole-Direct`,
+  rsl_rl training.
+- 3.0 API differences from 2.3: data are Warp arrays read with `.torch`; setters end in `_index` /
+  `_mask`; commands go through `robot.actuators.target_command.set_*_index`
+  (`set_joint_effort_target_index` is deprecated); backends are chosen with presets
+  (`physics=newton_mjwarp`).
+
+Run Jupyter from the project folder:
+```bash
+cd ~/git_repos/humanoid-locomotion-lab && uv run --project ~/git_repos/IsaacLab-3.0 --with jupyterlab jupyter lab
+```
+- `--project` selects the Isaac Lab 3.0 environment (`IsaacLab-3.0/.venv`, defined by its
+  `pyproject.toml`) without changing folder; this project has no `pyproject.toml` of its own, so a
+  plain `uv run` here would not find Isaac Lab.
+- `--with jupyterlab` adds JupyterLab temporarily on top of that environment without modifying it
+  (uv re-syncs the environment from Isaac Lab's `pyproject.toml` and could remove a direct install).
+- Classic interface instead: `uv run --project ~/git_repos/IsaacLab-3.0 --with notebook jupyter notebook`
+  (same kernel, same behaviour).
+Command-line training: `cd ~/git_repos/IsaacLab-3.0 && uv run isaaclab train --rl_library rsl_rl --task Isaac-Cartpole-Direct physics=newton_mjwarp`.
+
+Lessons:
+- [ ] **1. Simulator basics** (`notebooks/01_simulator_basics.ipynb`): scene config, open/close a
+      simulation, inspect the robot, the step loop, parallel envs as a batch, forces checked against
+      physics (hinge formula: 15.69 m/s² predicted and measured), a controller at 50 Hz over 200 Hz
+      physics (decimation), per-env resets, camera images.
+- [ ] 2. The MDP by hand: cart-pole as a `DirectRLEnv` (observations, actions, reward, terminations,
+      resets), run with random actions.
+- [ ] 3. Own PPO on the batched GPU env; debug with training curves.
+- [ ] 4. The same MDP as a manager-based env; compare line by line with lesson 2.
+- [ ] 5. Swap in `rsl_rl`; compare with the own PPO.
+- [ ] 6. Back to legged robots: a quadruped from Isaac Lab's examples, then the G1 config.
+
 ## Phase 2: learn the manager-based environment by mapping it to an MDP (a few days)
 
 | MDP concept | Isaac Lab config |
